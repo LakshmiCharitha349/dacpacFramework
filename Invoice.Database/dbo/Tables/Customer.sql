@@ -1,0 +1,8 @@
+CREATE TABLE [dbo].[Customer]
+(
+	[CustomerId] INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+	[CustomerName] NVARCHAR(100) NOT NULL,
+	[Email] NVARCHAR(100) NULL,
+	[CreatedDate] DATETIME2 NOT NULL DEFAULT GETUTCDATE(),
+	[ModifiedDate] DATETIME2 NULL
+);
