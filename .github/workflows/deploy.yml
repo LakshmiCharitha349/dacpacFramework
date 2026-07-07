@@ -1,0 +1,96 @@
+name: Build and Deploy Database
+
+# Trigger: Run on push to main branch
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'Invoice.Database/**'
+      - '.github/workflows/**'
+  workflow_dispatch: # Allow manual trigger
+
+# Environment variables
+env:
+  BUILD_CONFIGURATION: Release
+  DACPAC_PATH: Invoice.Database/bin/Release/Invoice.Database.dacpac
+
+jobs:
+  build:
+    name: Build Database Project
+    runs-on: windows-latest
+
+    steps:
+    # Step 1: Checkout code from GitHub
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    # Step 2: Setup MSBuild
+    - name: Setup MSBuild
+      uses: microsoft/setup-msbuild@v1.1
+
+    # Step 3: Build the .sqlproj
+    - name: Build Invoice.Database.sqlproj
+      run: |
+        msbuild Invoice.Database/Invoice.Database.sqlproj /p:Configuration=${{ env.BUILD_CONFIGURATION }} /p:Platform="AnyCPU" /v:minimal
+        Write-Host "✅ Build completed successfully!" -ForegroundColor Green
+      shell: pwsh
+
+    # Step 4: Verify .dacpac was created
+    - name: Verify .dacpac created
+      run: |
+        if (Test-Path "${{ env.DACPAC_PATH }}") {
+          Write-Host "✅ .dacpac file found: ${{ env.DACPAC_PATH }}" -ForegroundColor Green
+          $dacpac = Get-Item "${{ env.DACPAC_PATH }}"
+          Write-Host "  Size: $([math]::Round($dacpac.Length / 1KB, 2)) KB"
+        } else {
+          Write-Host "❌ .dacpac file not found!" -ForegroundColor Red
+          exit 1
+        }
+      shell: pwsh
+
+    # Step 5: Upload .dacpac as artifact
+    - name: Upload .dacpac artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: dacpac
+        path: ${{ env.DACPAC_PATH }}
+        retention-days: 30
+
+    # Step 6: Summary
+    - name: Build Summary
+      run: |
+        Write-Host "`n========================================" -ForegroundColor Cyan
+        Write-Host "✅ BUILD SUCCESSFUL" -ForegroundColor Green
+        Write-Host "========================================" -ForegroundColor Cyan
+        Write-Host "Project: Invoice.Database"
+        Write-Host "Artifact: Invoice.Database.dacpac"
+        Write-Host "Configuration: ${{ env.BUILD_CONFIGURATION }}"
+        Write-Host "========================================`n" -ForegroundColor Cyan
+      shell: pwsh
+
+  # Optional: Deploy to Dev (commented out for now - add LocalDB or Azure SQL later)
+  # deploy-dev:
+  #   name: Deploy to Dev
+  #   runs-on: windows-latest
+  #   needs: build
+  #   environment: Development
+  #   
+  #   steps:
+  #   - name: Download .dacpac
+  #     uses: actions/download-artifact@v4
+  #     with:
+  #       name: dacpac
+  #   
+  #   - name: Install SqlPackage
+  #     run: dotnet tool install -g microsoft.sqlpackage
+  #     shell: pwsh
+  #   
+  #   - name: Deploy to LocalDB
+  #     run: |
+  #       sqlpackage /Action:Publish `
+  #         /SourceFile:Invoice.Database.dacpac `
+  #         /TargetServerName:"(localdb)\MSSQLLocalDB" `
+  #         /TargetDatabaseName:"InvoiceDB_Dev" `
+  #         /Variables:Environment=development
+  #     shell: pwsh
